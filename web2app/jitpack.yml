@@ -1,0 +1,6 @@
+jdk:
+  - openjdk21
+
+gradle:
+  wrapper: true
+  version: 8.2

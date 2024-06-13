@@ -1,0 +1,39 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.2.2' // 使用最新的稳定版本
+    }
+}
+
+plugins {
+    id 'com.android.application' version '8.2.2' apply false
+    id 'com.android.library' version '8.2.2' apply false
+}
+
+
+subprojects {
+//    apply plugin: 'java'
+    tasks.withType(JavaCompile) {
+        sourceCompatibility = '11'
+        targetCompatibility = '11'
+    }
+}
+
+//publishing {
+//    publications {
+//        mavenJava(MavenPublication) {
+//            from components.java
+//        }
+//    }
+//    repositories {
+//        maven {
+//            name = "local"
+//            url = uri("${project.buildDir}/repos")
+//        }
+//    }
+//}
