@@ -23,17 +23,3 @@ subprojects {
         targetCompatibility = '11'
     }
 }
-
-//publishing {
-//    publications {
-//        mavenJava(MavenPublication) {
-//            from components.java
-//        }
-//    }
-//    repositories {
-//        maven {
-//            name = "local"
-//            url = uri("${project.buildDir}/repos")
-//        }
-//    }
-//}
