@@ -3,4 +3,4 @@ jdk:
 
 gradle:
   wrapper: true
-  version: 8.2
+  version: 17
