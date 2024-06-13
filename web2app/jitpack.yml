@@ -1,6 +1,6 @@
 jdk:
-  - openjdk17
+  - openjdk11
 
 gradle:
   wrapper: true
-  version: 17
+  version: 11
