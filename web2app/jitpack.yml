@@ -1,6 +1,0 @@
-jdk:
-  - openjdk11
-
-gradle:
-  wrapper: true
-  version: 11
