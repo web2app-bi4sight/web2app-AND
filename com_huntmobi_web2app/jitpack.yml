@@ -1,8 +1,8 @@
 jdk:
-  - openjdk22
+  - openjdk11
 
 install:
-  - ./gradlew clean
+  - ./gradlew generatePomFileForReleasePublication
 
 script:
-  - ./gradlew build
+  - ./gradlew assembleRelease
