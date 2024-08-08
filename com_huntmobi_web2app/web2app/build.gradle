@@ -61,7 +61,7 @@ afterEvaluate {
 
                 groupId = 'com.github.web2app-bi4sight'
                 artifactId = 'web2app-AND'
-                version = '0.0.7'
+                version = '0.0.8'
 
                 pom {
                     licenses {
