@@ -1,6 +1,5 @@
 plugins {
     id 'com.android.library'
-    id 'maven-publish'
 }
 
 android {
@@ -33,6 +32,7 @@ android {
 }
 
 dependencies {
+
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     testImplementation 'junit:junit:4.13.2'
@@ -51,27 +51,10 @@ dependencies {
     implementation('com.google.android.gms:play-services-base:18.5.0') {
         exclude group: 'com.google.android.gms', module: 'play-services-base'
     }
-}
 
-afterEvaluate {
-    publishing {
-        publications {
-            release(MavenPublication) {
-                from components.findByName('release')
 
-                groupId = 'com.github.web2app-bi4sight'
-                artifactId = 'web2app-AND'
-                version = '0.0.9'
+//    implementation 'androidx.core:core:1.12.0'
+//    implementation 'com.google.android.gms:play-services-ads-identifier:18.0.1'
+//    implementation 'com.google.code.gson:gson:2.10'
 
-                pom {
-                    licenses {
-                        license {
-                            name = 'The Apache Software License, Version 2.0'
-                            url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
