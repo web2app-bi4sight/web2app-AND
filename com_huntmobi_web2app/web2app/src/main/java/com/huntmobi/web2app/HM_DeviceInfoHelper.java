@@ -3,6 +3,7 @@ package com.huntmobi.web2app;
 import android.os.Build;
 import android.util.DisplayMetrics;
 import android.content.Context;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -35,8 +36,6 @@ public class HM_DeviceInfoHelper {
         } catch (JSONException e) {
             e.printStackTrace();
         }
-
-
         return deviceInfo;
     }
 

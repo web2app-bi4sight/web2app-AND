@@ -14,6 +14,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 public class HM_Smartlink {
     static Application mApplication;
     private static String sCode = "";
@@ -44,6 +47,7 @@ public class HM_Smartlink {
     public static void init(Application ap, String scode) {
         mApplication = ap;
         sCode = scode;
+        HM_DeviceData.getInstance().saveDeviceInfo(ap.getApplicationContext());
 
         checkGoogleAdsId(new GoogleAdsIdCallback() {
             @Override
@@ -80,7 +84,8 @@ public class HM_Smartlink {
                 @Override
                 public void onSuccess(String pasteData) {
                     if (!TextUtils.isEmpty(pasteData)) {
-                        cbc = pasteData;
+                        if(!matchesInString(pasteData).isEmpty())
+                            cbc = matchesInString(pasteData);
                     }
                     slAttibute(attributeBlock);
                 }
@@ -93,9 +98,13 @@ public class HM_Smartlink {
         String url = baseURL + HM_UrlConfig.slattibuteString;
         String eid = getGUID();
         long timestamp = System.currentTimeMillis()/1000;
-//            [mDic setObject:aid != nil ? aid : @"" forKey:@"aid"];
-//        NSString *aid = [userDefaults objectForKey:@"HM_SMART_AID"];
-//        NSString *dtid = [userDefaults objectForKey:@"HM_SMART_DTID"];
+
+        SharedPreferences sharedPreferences = mApplication.getSharedPreferences("HM_Device_Data", Context.MODE_PRIVATE);
+        String aid = sharedPreferences.getString("HM_SMART_AID", "");
+        String dtid = sharedPreferences.getString("HM_SMART_DTID", "");
+        long ats = sharedPreferences.getLong("HM_SMART_ATS", 0);
+
+        Map<String, ?> deviceInfo = sharedPreferences.getAll();
         JSONObject requestBody = new JSONObject();
         try {
             requestBody.put("cbc", cbc);
@@ -105,11 +114,28 @@ public class HM_Smartlink {
             requestBody.put("ts", timestamp);
             requestBody.put("atc", atc);
             requestBody.put("from", from);
-            requestBody.put("device", new JSONObject());
+            JSONObject deviceJson = new JSONObject();
+            for (Map.Entry<String, ?> entry : deviceInfo.entrySet()) {
+                // 确保将每个值转换为合适的 JSON 类型
+                Object value = entry.getValue();
+                if (value instanceof String) {
+                    deviceJson.put(entry.getKey(), (String) value);
+                } else if (value instanceof Integer) {
+                    deviceJson.put(entry.getKey(), (Integer) value);
+                } else if (value instanceof Boolean) {
+                    deviceJson.put(entry.getKey(), (Boolean) value);
+                } else if (value instanceof Double) {
+                    deviceJson.put(entry.getKey(), (Double) value);
+                } else {
+                    // 其他类型根据需要处理
+                    deviceJson.put(entry.getKey(), value.toString());
+                }
+            }
+            requestBody.put("device", deviceJson);
             requestBody.put("ua", "");
-            requestBody.put("aid", "");
-            requestBody.put("dtid", deviceTrackIDString);
-//            requestBody.put("dtid", deviceTrackIDString);
+            requestBody.put("aid", aid.isEmpty() ? "" : aid);
+            requestBody.put("dtid", atc.equals("add") ? deviceTrackIDString : (dtid.isEmpty() ? "" : dtid));
+            requestBody.put("ats", ats != 0 ? ats : 0L);
             from = "";
             cbc = "";
         } catch (JSONException e) {
@@ -125,13 +151,13 @@ public class HM_Smartlink {
                     if ("0".equals(code)) {
                         String aid = data.optString("aid");
                         String dtid = data.optString("dtid");
-                        String ats = data.optString("ats");
+                        long ats = data.optLong("ats");
                         if (!aid.isEmpty()) {
                             SharedPreferences sharedPreferences = mApplication.getSharedPreferences(HM_SharedPreferences_Info, Context.MODE_PRIVATE);
                             SharedPreferences.Editor editor = sharedPreferences.edit();
                             editor.putString("HM_SMART_AID", aid);
                             editor.putString("HM_SMART_DTID", dtid);
-                            editor.putString("HM_SMART_ATS", ats);
+                            editor.putLong("HM_SMART_ATS", ats);
                             editor.apply(); // 保存修改
                         }
                     }
@@ -237,6 +263,20 @@ public class HM_Smartlink {
     public static String getGUID() {
         UUID uuid = UUID.randomUUID();
         return uuid.toString();
+    }
+
+    public static String matchesInString(String input) {
+        String pattern = "[BISGHT][A-Za-z0-9]{2}(L|K)[A-Za-z0-9]{7}[SMARL]";
+        Pattern compiledPattern = Pattern.compile(pattern);
+        Matcher matcher = compiledPattern.matcher(input);
+        StringBuilder resultBuilder = new StringBuilder();
+        while (matcher.find()) {
+            resultBuilder.append(matcher.group()).append("");
+        }
+        if (resultBuilder.length() > 0) {
+            resultBuilder.setLength(resultBuilder.length());
+        }
+        return resultBuilder.toString();
     }
 
 }

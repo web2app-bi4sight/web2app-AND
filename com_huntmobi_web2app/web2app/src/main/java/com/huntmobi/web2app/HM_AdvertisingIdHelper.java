@@ -3,7 +3,6 @@ package com.huntmobi.web2app;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
-
 import com.google.android.gms.ads.identifier.AdvertisingIdClient;
 import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.common.GooglePlayServicesNotAvailableException;

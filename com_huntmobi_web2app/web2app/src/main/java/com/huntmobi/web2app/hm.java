@@ -17,7 +17,7 @@ import java.util.UUID;
 public class hm {
     static Application mApplication;
     private static final String TAG = "HuntMobiLog";
-    static String baseURL = "https://wa.bi4sight.com";
+    static String baseURL = "https://cdn.bi4sight.com";
 //    private static InitCallback initCallback; // 回调接口
     private static UpdateW2aDataCallback updateW2aDataCallback; // 回调接口
     static boolean isShowLog = false;
@@ -31,6 +31,10 @@ public class hm {
     }
 
     static int callbackNum = 0;
+
+    // <editor-fold desc="">
+
+    // </editor-fold>
 
     /**
      * 初始化方法，用于初始化应用程序并执行相关操作。
@@ -1097,7 +1101,7 @@ public class hm {
                 Log.e("AdvDataRead", "Failed to parse HM_Adv_Data as JSON array: " + HM_Adv_Data, e);
             }
         } else {
-            Log.w("AdvDataRead", "HM_Adv_Data is null or empty");
+            Log.d("AdvDataRead", "HM_Adv_Data is null or empty");
         }
         return advDataArray;
     }
@@ -1129,5 +1133,25 @@ public class hm {
         Date currentDate = new Date();
         long utcTimestamp = currentDate.getTime() / 1000; // Convert milliseconds to seconds
         return String.valueOf(utcTimestamp);
+    }
+
+    public static void EventKey(String eid) {
+        SharedPreferences sharedPreferences = mApplication.getSharedPreferences(HM_SharedPreferences_Info, Context.MODE_PRIVATE);
+        String gateway = sharedPreferences.getString("HM_Gateway", "");
+        if (TextUtils.isEmpty(gateway)) {
+            return;
+        }
+        String url = baseURL + HM_UrlConfig.eventkey;
+        HM_RequestManager.HttpRequest.Callback callback = new HM_RequestManager.HttpRequest.Callback() {
+            @Override
+            public void onSuccess(Map<String, String> response) {
+            }
+            @Override
+            public void onFailure(int errorCode, String errorMessage) {
+                // Handle failure response
+                Log.e(TAG, "Request failed with error code: " + errorCode + ", message: " + errorMessage);
+            }
+        };
+        HM_RequestManager.sendHttpGetRequest(url, eid);
     }
 }

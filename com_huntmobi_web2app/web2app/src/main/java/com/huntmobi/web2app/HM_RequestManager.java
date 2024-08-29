@@ -50,7 +50,7 @@ public class HM_RequestManager {
                             jsonObject.getString("requestBody"),
                             jsonObject.getString("deviceID"),
                             jsonObject.getBoolean("isHasCallback"),
-                            null); // 这里将callback设为null，你可以根据需要修改
+                            null);
                     requestQueue.add(httpRequest);
                 }
             } catch (JSONException e) {
@@ -89,6 +89,17 @@ public class HM_RequestManager {
         }
     }
 
+    public static void sendHttpGetRequest(final String urlString, final String eid) {
+        HttpRequest request = new HttpRequest(urlString, eid, false, null);
+        synchronized (requestQueue) {
+            requestQueue.add(request);
+            saveRequestQueue();
+            if (!isSending) {
+                sendNextRequest();
+            }
+        }
+    }
+
     private static void sendNextRequest() {
         synchronized (requestQueue) {
             if (!requestQueue.isEmpty()) {
@@ -109,20 +120,33 @@ public class HM_RequestManager {
         private final String urlString;
         private final String requestBody;
         private final String deviceID;
+        private final String eid;
         private final Callback callback;
         private final Boolean isHasCallback;
 
-        public interface Callback {
-            void onSuccess(Map<String, String> response);
-            void onFailure(int errorCode, String errorMessage);
-        }
-
+        // 用于POST请求的构造函数
         public HttpRequest(String urlString, String requestBody, String deviceID, Boolean isHasCallback, Callback callback) {
             this.urlString = urlString;
             this.requestBody = requestBody;
             this.deviceID = deviceID;
+            this.eid = null; // POST请求不使用eid
             this.callback = callback;
             this.isHasCallback = isHasCallback;
+        }
+
+        // 用于GET请求的构造函数
+        public HttpRequest(String urlString, String eid, Boolean isHasCallback, Callback callback) {
+            this.urlString = urlString;
+            this.requestBody = null; // GET请求不使用requestBody
+            this.deviceID = null; // GET请求不使用deviceID
+            this.eid = eid;
+            this.callback = callback;
+            this.isHasCallback = isHasCallback;
+        }
+
+        public interface Callback {
+            void onSuccess(Map<String, String> response);
+            void onFailure(int errorCode, String errorMessage);
         }
 
         public void send() {
@@ -133,16 +157,24 @@ public class HM_RequestManager {
                     try {
                         URL url = new URL(urlString);
                         connection = (HttpURLConnection) url.openConnection();
-                        connection.setRequestMethod("POST");
-                        connection.setRequestProperty("Content-Type", "application/json");
-                        connection.setRequestProperty("__hm_uuid__", deviceID);
-                        connection.setDoOutput(true);
-                        Log.d("HM_RequestBody", requestBody);
-                        DataOutputStream outputStream = new DataOutputStream(connection.getOutputStream());
-                        outputStream.writeBytes(requestBody);
-                        outputStream.flush();
-                        outputStream.close();
-
+                        if (requestBody == null) {
+                            connection.setRequestMethod("GET");
+                            connection.setRequestProperty("eid", eid);
+                            String HM_W2a_Data = sharedPreferences.getString("HM_W2a_Data", "");
+                            String deviceID = sharedPreferences.getString("HM_Device_Id", "");
+                            connection.setRequestProperty("__hm_uuid__", deviceID);
+                            connection.setRequestProperty("w2a_data_encrypt", HM_W2a_Data);
+                        } else {
+                            connection.setRequestMethod("POST");
+                            connection.setRequestProperty("Content-Type", "application/json");
+                            connection.setRequestProperty("__hm_uuid__", deviceID);
+                            connection.setDoOutput(true);
+                            DataOutputStream outputStream = new DataOutputStream(connection.getOutputStream());
+                            outputStream.writeBytes(requestBody);
+                            outputStream.flush();
+                            outputStream.close();
+                            Log.d("HM_RequestBody", urlString + requestBody);
+                        }
                         int responseCode = connection.getResponseCode();
                         if (responseCode == HttpURLConnection.HTTP_OK) {
                             BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
