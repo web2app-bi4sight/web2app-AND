@@ -3,6 +3,13 @@ pluginManagement {
         google()
         mavenCentral()
         gradlePluginPortal()
+        maven {
+            url = uri("https://maven.pkg.github.com/web2app-bi4sight/web2app-AND")
+            credentials {
+                username = "HM-User-X"
+                password = "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"
+            }
+        }
     }
 }
 dependencyResolutionManagement {
@@ -10,6 +17,13 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven {
+            url = uri("https://maven.pkg.github.com/web2app-bi4sight/web2app-AND")
+            credentials {
+                username = "HM-User-X"
+                password = "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"
+            }
+        }
     }
 }
 
