@@ -24,7 +24,7 @@ public class HM_EventInfoModel {
     private HM_EventDataModel eventData;
 
     // Constructor
-    public HM_EventInfoModel(boolean isEventKey, boolean isDelay, HM_EventDataModel eventData) {
+    public HM_EventInfoModel(boolean isDelay, boolean isEventKey, HM_EventDataModel eventData) {
         this.isEventKey = isEventKey;
         this.isDelay = isDelay;
         this.eventData = (eventData != null) ? eventData : new HM_EventDataModel("", "", "", "", "", "", null);  // 防止 null
