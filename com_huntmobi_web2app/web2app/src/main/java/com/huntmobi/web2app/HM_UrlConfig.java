@@ -16,5 +16,8 @@ public class HM_UrlConfig {
 
     public static final String eventkey = "/eventkey";
 
+    public static final String W2A_ATTRIBUTE = "/w2a/attribute";
+    public static final String W2A_EVENTPOST = "/w2a/eventpost";
+    public static final String W2A_CUSTOMERINFO = "/w2a/customerinfo";
 
 }

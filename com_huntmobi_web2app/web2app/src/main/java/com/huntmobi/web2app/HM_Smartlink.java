@@ -47,7 +47,7 @@ public class HM_Smartlink {
     public static void init(Application ap, String scode) {
         mApplication = ap;
         sCode = scode;
-        HM_DeviceData.getInstance().saveDeviceInfo(ap.getApplicationContext());
+        HM_DeviceData.getInstance(ap.getApplicationContext()).saveDeviceInfo();
 
         checkGoogleAdsId(new GoogleAdsIdCallback() {
             @Override
