@@ -32,6 +32,7 @@ public class HM_Web2App {
     static int callbackNum = 0;
     private static attibuteCallback attCallback;
     private static boolean isFirst = true;
+    private static int foregroundActivityCount = 0;
     public static synchronized HM_Web2App getInstance(Application ap) {
         if (sharedInstance == null) {
             sharedInstance = new HM_Web2App();
@@ -56,12 +57,15 @@ public class HM_Web2App {
 
             @Override
             public void onActivityStarted(@NonNull Activity activity) {
+                if (foregroundActivityCount == 0) {
+                    // 只有从后台进入前台时才调用
+                    HM_Web2App.sharedInstance.onAppForeground();
+                }
+                foregroundActivityCount++;
             }
 
             @Override
             public void onActivityResumed(@NonNull Activity activity) {
-                // 应用从后台回到前台时触发此方法
-                HM_Web2App.sharedInstance.onAppForeground();
             }
 
             @Override
@@ -70,6 +74,7 @@ public class HM_Web2App {
 
             @Override
             public void onActivityStopped(@NonNull Activity activity) {
+                foregroundActivityCount--;
             }
 
             @Override
