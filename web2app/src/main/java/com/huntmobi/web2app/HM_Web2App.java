@@ -1,24 +1,22 @@
 package com.huntmobi.web2app;
 
 import android.app.Application;
-import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
+
 import android.content.SharedPreferences;
-import android.os.Build;
 import android.text.TextUtils;
-import android.util.Log;
 import org.json.JSONException;
 import org.json.JSONObject;
-import java.util.HashMap;
-import java.util.Locale;
+
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
 import android.app.Activity;
 import android.os.Bundle;
+
+import androidx.annotation.NonNull;
+
 public class HM_Web2App {
     private static final String HM_SharedPreferences_Info = "HM_SharedPreferences_Info";
     private static HM_Web2App sharedInstance;
@@ -26,7 +24,7 @@ public class HM_Web2App {
     private String[] eventNamesArray;
     private static String atcString;
     private static String cbcString;
-    private boolean isAddRequest;
+    private boolean isInitRequest;
     public static String appname;
     private static Application mApplication;
     static String baseURL = "https://cdn.bi4sight.com";
@@ -37,7 +35,7 @@ public class HM_Web2App {
     public static synchronized HM_Web2App getInstance(Application ap) {
         if (sharedInstance == null) {
             sharedInstance = new HM_Web2App();
-            sharedInstance.isAddRequest = false;
+            sharedInstance.isInitRequest = false;
             cbcString = "";
             atcString = "";
             sharedInstance.deviceTrackID = "";
@@ -53,33 +51,33 @@ public class HM_Web2App {
     private static void registerLifecycleCallbacks() {
         mApplication.registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {
             @Override
-            public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
+            public void onActivityCreated(@NonNull Activity activity, Bundle savedInstanceState) {
             }
 
             @Override
-            public void onActivityStarted(Activity activity) {
+            public void onActivityStarted(@NonNull Activity activity) {
             }
 
             @Override
-            public void onActivityResumed(Activity activity) {
+            public void onActivityResumed(@NonNull Activity activity) {
                 // 应用从后台回到前台时触发此方法
                 HM_Web2App.sharedInstance.onAppForeground();
             }
 
             @Override
-            public void onActivityPaused(Activity activity) {
+            public void onActivityPaused(@NonNull Activity activity) {
             }
 
             @Override
-            public void onActivityStopped(Activity activity) {
+            public void onActivityStopped(@NonNull Activity activity) {
             }
 
             @Override
-            public void onActivitySaveInstanceState(Activity activity, Bundle outState) {
+            public void onActivitySaveInstanceState(@NonNull Activity activity, @NonNull Bundle outState) {
             }
 
             @Override
-            public void onActivityDestroyed(Activity activity) {
+            public void onActivityDestroyed(@NonNull Activity activity) {
             }
         });
     }
@@ -88,7 +86,10 @@ public class HM_Web2App {
         if (isFirst) {
             isFirst = false;
         } else {
-            attibute(attCallback);
+            if (!isInitRequest) {
+                isInitRequest = true;
+                init(attCallback);
+            }
         }
     }
 
@@ -96,7 +97,7 @@ public class HM_Web2App {
         void onSuccess(JSONObject data);
     }
     public void attibuteWithAppname(String AppName, attibuteCallback successBlock) {
-        callbackNum += 1;
+        isInitRequest = true;
         appname = AppName;
         attCallback = successBlock;
         HM_RequestManager requestManager = HM_RequestManager.getInstance(mApplication);
@@ -124,6 +125,9 @@ public class HM_Web2App {
     }
 
     private void init(attibuteCallback successBlock) {
+        if (successBlock != null) {
+            callbackNum += 1;
+        }
         HM_DeviceData.getInstance(mApplication).saveWADeviceInfo();
 
         SharedPreferences sharedPreferences = mApplication.getSharedPreferences(HM_SharedPreferences_Info, Context.MODE_PRIVATE);
@@ -151,7 +155,6 @@ public class HM_Web2App {
                 }
             });
         }
-
     }
 
     private void hmGetWebViewInfo(attibuteCallback successBlock) {
@@ -188,6 +191,7 @@ public class HM_Web2App {
             @Override
             public void onSuccess(Map<String, String> response) {
                 try {
+                    isInitRequest = false;
                     JSONObject jsonResponse = new JSONObject(Objects.requireNonNull(response.get("response")));
                     String code = jsonResponse.optString("code");
                     if ("0".equals(code)) {
@@ -201,10 +205,10 @@ public class HM_Web2App {
                         editor.putString("HM_W2a_Data", w2aDataEncrypt);
                         editor.putString("HM_WEB2APP_DTID", dtid);
                         editor.apply();
-                            if (callbackNum > 0) {
-                                successBlock.onSuccess(data);
-                                callbackNum -= 1;
-                            }
+                        if (callbackNum > 0) {
+                            successBlock.onSuccess(data);
+                            callbackNum -= 1;
+                        }
                     } else {
                         if (callbackNum > 0) {
                             successBlock.onSuccess(null);
@@ -222,6 +226,7 @@ public class HM_Web2App {
             @Override
             public void onFailure(int errorCode, String errorMessage) {
                 // Handle failure response
+                isInitRequest = false;
                 if (callbackNum > 0) {
                     successBlock.onSuccess(null);
                     callbackNum -= 1;
