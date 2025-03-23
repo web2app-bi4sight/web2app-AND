@@ -37,7 +37,7 @@ public class HM_DeviceData {
             deviceInfo.put("appver", getAppVersionCode());
             deviceInfo.put("osversion", Build.VERSION.RELEASE != null ? Build.VERSION.RELEASE : "");
             deviceInfo.put("model", Build.MODEL != null ? Build.MODEL : "");
-            deviceInfo.put("timezoon", getTimeZone() != null ? getTimeZone() : "");
+            deviceInfo.put("timezone", getTimeZone() != null ? getTimeZone() : "");
             deviceInfo.put("ss_w", getScreenWidth());
             deviceInfo.put("ss_h", getScreenHeight());
             deviceInfo.put("screensize", getScreenDensity());

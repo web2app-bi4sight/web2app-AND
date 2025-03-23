@@ -3,6 +3,7 @@ package com.huntmobi.web2app;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -23,6 +24,25 @@ public class HM_WebView {
         mContext = context;
         mHandler = new Handler(Looper.getMainLooper());
         setupWebView();
+    }
+
+    public static String getUserAgent(Context context) {
+        String userAgent = "";
+        try {
+            // 优先使用 WebSettings.getDefaultUserAgent（API 17+）
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+                userAgent = WebSettings.getDefaultUserAgent(context);
+            } else {
+                // 低于 API 17，使用 WebView 获取
+                WebView webView = new WebView(context);
+                userAgent = webView.getSettings().getUserAgentString();
+                webView.destroy(); // 避免内存泄漏
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            // 获取失败直接返回空字符串，不用获取系统UA
+        }
+        return userAgent;
     }
 
     @SuppressLint("SetJavaScriptEnabled")

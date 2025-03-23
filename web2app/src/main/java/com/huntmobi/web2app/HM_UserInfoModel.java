@@ -189,27 +189,17 @@ public class HM_UserInfoModel {
      */
     public JSONObject toMap() {
         Map<String, String> map = new HashMap<>();
-        map.put("email", email);
-        map.put("fbLoginId", fbLoginId);
-        map.put("phone", phone);
+        map.put("em", email);
+        map.put("fb_login_id", fbLoginId);
+        map.put("ph", phone);
         map.put("country", country);
-        map.put("zipCode", zipCode);
-        map.put("city", city);
-        map.put("state", state);
-        map.put("gender", gender);
-        map.put("firstName", firstName);
-        map.put("lastName", lastName);
-        map.put("birthday", birthday);
+        map.put("zp", zipCode);
+        map.put("ct", city);
+        map.put("st", state);
+        map.put("ge", gender);
+        map.put("fn", firstName);
+        map.put("ln", lastName);
+        map.put("db", birthday);
         return new JSONObject(Collections.unmodifiableMap(map));
     }
-
-//    public JSONObject toMap() {
-//        Map<String, Object> map = new HashMap<>();
-//        map.put("is_event", isEventKey);
-//        map.put("is_delay", isDelay);
-//        map.put("event_data", eventData.toMap());
-//
-//        // 创建一个不可变的 Map 并将其转换为 JSONObject
-//        return new JSONObject(Collections.unmodifiableMap(map));
-//    }
 }

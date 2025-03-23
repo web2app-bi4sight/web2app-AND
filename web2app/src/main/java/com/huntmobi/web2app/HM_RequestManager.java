@@ -157,6 +157,8 @@ public class HM_RequestManager {
                     try {
                         URL url = new URL(urlString);
                         connection = (HttpURLConnection) url.openConnection();
+                        connection.setConnectTimeout(5000);
+                        connection.setReadTimeout(5000);
                         if (requestBody == null) {
                             connection.setRequestMethod("GET");
                             connection.setRequestProperty("eid", eid);

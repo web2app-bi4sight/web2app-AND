@@ -14,6 +14,7 @@ import java.util.UUID;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 
@@ -25,14 +26,14 @@ public class HM_Web2App {
     private static String atcString;
     private static String cbcString;
     private boolean isInitRequest;
+    boolean isHasAttibution = false;
     public static String appname;
     private static Application mApplication;
     static String baseURL = "https://cdn.bi4sight.com";
     public  String Uid;
+    public  String pasteboardString;
     static int callbackNum = 0;
     private static attibuteCallback attCallback;
-    private static boolean isFirst = true;
-    private static int foregroundActivityCount = 1;
     public static synchronized HM_Web2App getInstance(Application ap) {
         if (sharedInstance == null) {
             sharedInstance = new HM_Web2App();
@@ -43,66 +44,18 @@ public class HM_Web2App {
             appname = "";
             mApplication = ap;
             sharedInstance.Uid = "";
-            registerLifecycleCallbacks();
-            isFirst = true;
+            sharedInstance.pasteboardString = "";
         }
         return sharedInstance;
-    }
-
-    private static void registerLifecycleCallbacks() {
-        mApplication.registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {
-            @Override
-            public void onActivityCreated(@NonNull Activity activity, Bundle savedInstanceState) {
-            }
-
-            @Override
-            public void onActivityStarted(@NonNull Activity activity) {
-                if (foregroundActivityCount == 0) {
-                    // 只有从后台进入前台时才调用
-                    HM_Web2App.sharedInstance.onAppForeground();
-                }
-                foregroundActivityCount++;
-            }
-
-            @Override
-            public void onActivityResumed(@NonNull Activity activity) {
-            }
-
-            @Override
-            public void onActivityPaused(@NonNull Activity activity) {
-            }
-
-            @Override
-            public void onActivityStopped(@NonNull Activity activity) {
-                foregroundActivityCount--;
-            }
-
-            @Override
-            public void onActivitySaveInstanceState(@NonNull Activity activity, @NonNull Bundle outState) {
-            }
-
-            @Override
-            public void onActivityDestroyed(@NonNull Activity activity) {
-            }
-        });
-    }
-
-    private void onAppForeground() {
-        if (isFirst) {
-            isFirst = false;
-        } else {
-            if (!isInitRequest) {
-                isInitRequest = true;
-                init(attCallback);
-            }
-        }
     }
 
     public interface attibuteCallback {
         void onSuccess(JSONObject data);
     }
     public void attibuteWithAppname(String AppName, attibuteCallback successBlock) {
+//        Log.d("HMLOG", "attibuteWithAppname: ");
         isInitRequest = true;
+        isHasAttibution = true;
         appname = AppName;
         attCallback = successBlock;
         HM_RequestManager requestManager = HM_RequestManager.getInstance(mApplication);
@@ -130,6 +83,7 @@ public class HM_Web2App {
     }
 
     private void init(attibuteCallback successBlock) {
+//        Log.d("HMLOG", "init: ");
         if (successBlock != null) {
             callbackNum += 1;
         }
@@ -142,41 +96,46 @@ public class HM_Web2App {
         String isFirstInsert = sharedPreferences.getString("HM_isFirstInsert", "1");
         if ("0".equals(isFirstInsert)) {
             atcString = "launch";
-            attibute(successBlock);
+            cbcString = pasteboardString;
+            hmGetWebViewInfo(successBlock);
         } else {
             editor.putString("HM_isFirstInsert", "0");
             editor.apply();
-            HM_ClipboardUtil.getClipboardText(mApplication, new HM_ClipboardUtil.PasteDataCallback() {
-                @Override
-                public void onSuccess(String pasteData) {
-                    if (!TextUtils.isEmpty(pasteData) && pasteData.startsWith("w2a_data:")) {
-                        String preStr = "w2a_data:";
-                        if (pasteData.startsWith(preStr)) {// 剪切板有包含w2a_data:开头的数据
-                            cbcString = pasteData;
+            if (pasteboardString.length() > 0) {
+                atcString = "add";
+                cbcString = pasteboardString;
+                hmGetWebViewInfo(successBlock);
+            } else {
+                HM_ClipboardUtil.getClipboardText(mApplication, new HM_ClipboardUtil.PasteDataCallback() {
+                    @Override
+                    public void onSuccess(String pasteData) {
+                        if (!TextUtils.isEmpty(pasteData) && pasteData.startsWith("w2a_data:")) {
+                            String preStr = "w2a_data:";
+                            if (pasteData.startsWith(preStr)) {// 剪切板有包含w2a_data:开头的数据
+                                cbcString = pasteData;
+                            }
                         }
+                        atcString = "add";
+                        hmGetWebViewInfo(successBlock);
                     }
-                    atcString = "add";
-                    hmGetWebViewInfo(successBlock);
-                }
-            });
+                });
+            }
         }
     }
 
     private void hmGetWebViewInfo(attibuteCallback successBlock) {
+//        Log.d("HMLOG", "hmGetWebViewInfo: ");
         try {
             SharedPreferences sharedPreferences = mApplication.getSharedPreferences(HM_SharedPreferences_Info, Context.MODE_PRIVATE);
-            String string = sharedPreferences.getString("HM_WebView_Fingerprint", null);
+            String string = sharedPreferences.getString("HM_WebView_UA", null);
             if (string != null && !string.isEmpty()) {
                 attibute(successBlock);
             } else {
-                HM_WebView webView = new HM_WebView(mApplication);
-                HM_WebView.GetFingerprint(new HM_WebView.FingerprintCallback() {
-                    @Override
-                    public void onCallback(String Fingerprint) {
-                        attibute(successBlock);
-                    }
-                });
-
+                String userAgent = HM_UserAgentUtil.getUserAgent(mApplication);
+                SharedPreferences.Editor editor = sharedPreferences.edit();
+                editor.putString("HM_WebView_UA", userAgent);
+                editor.apply();
+                attibute(successBlock);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -184,11 +143,26 @@ public class HM_Web2App {
         }
     }
 
+    public void reAttribution(attibuteCallback successBlock) {
+//        Log.d("HMLOG", "reAttribution: start");
+        SharedPreferences sharedPreferences = mApplication.getSharedPreferences(HM_SharedPreferences_Info, Context.MODE_PRIVATE);
+        String isFirstInsert = sharedPreferences.getString("HM_isFirstInsert", "1");
+        if (!"0".equals(isFirstInsert)) return;//如果是首次启动丢弃请求，走attibuteWithAppname新装逻辑
+        if (isInitRequest || !isHasAttibution) return;//新装请求结束前，触发回到前台也丢弃掉，保证新装逻辑正常；如有在attibuteWithAppname前触发，也不执行
+        if (successBlock != null) {
+            callbackNum += 1;
+        }
+        atcString = "launch";
+//        Log.d("HMLOG", "reAttribution: running");
+        cbcString = pasteboardString;
+        hmGetWebViewInfo(successBlock);
+    }
+
     private void attibute(attibuteCallback successBlock) {
-//        Log.d("HM_Web2App", "222222222222222222222222222");
+//        Log.d("HMLOG", "attibute: ");
         JSONObject dic = setRequestInfo();
         cbcString = "";
-
+        pasteboardString = "";
         SharedPreferences sharedPreferences = mApplication.getSharedPreferences(HM_SharedPreferences_Info, Context.MODE_PRIVATE);
         String url = baseURL + HM_UrlConfig.W2A_ATTRIBUTE;
         String deviceID = sharedPreferences.getString("HM_Device_Id", "");
@@ -275,16 +249,7 @@ public class HM_Web2App {
 
     private JSONObject setRequestInfo() {
         SharedPreferences sharedPreferences = mApplication.getSharedPreferences(HM_SharedPreferences_Info, Context.MODE_PRIVATE);
-        String ua = "";
-        try {
-            String jsonString = sharedPreferences.getString("HM_WebView_Fingerprint", "");
-            if (!jsonString.isEmpty()) {
-                JSONObject jsonObject = new JSONObject(jsonString);
-                ua = jsonObject.optString("ua");
-            }
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
+        String ua = sharedPreferences.getString("HM_WebView_UA", "");
 
         long timestamp = System.currentTimeMillis() / 1000L;
         String guid = getGUID();
@@ -306,7 +271,7 @@ public class HM_Web2App {
         JSONObject dic = new JSONObject();
         try {
             dic.put("device", deviceInfo);
-            dic.put("cbc", cbcString);
+            dic.put("cbc", "add".equals(atcString) ? cbcString : "" );
             dic.put("ua", ua);
             dic.put("ts", timestamp);
             dic.put("option", atcString);
@@ -449,6 +414,7 @@ public class HM_Web2App {
             init(successBlock);
         }
     }
+
     interface GoogleAdsIdCallback {
         void onGoogleAdsIdChecked(boolean isGoogleAdsIdNull);
     }
