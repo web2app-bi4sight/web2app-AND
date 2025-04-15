@@ -3,7 +3,7 @@ package com.huntmobi.web2app;
 public class HM_UrlConfig {
 
     public static String versionStr = "?v=2.4";
-    public static String versionString = "3.1.1";
+    public static String versionString = "3.1.2";
 
     public static final String INSTALL = "/oninstall"+versionStr;
     public static final String SESSION = "/onSession"+versionStr;
