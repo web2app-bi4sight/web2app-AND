@@ -8,6 +8,8 @@ import android.util.DisplayMetrics;
 
 import org.json.JSONObject;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
 
@@ -92,6 +94,30 @@ public class HM_DeviceData {
             e.printStackTrace();
         }
     }
+
+    public List<Object> getDeviceInfo() {
+        return Arrays.asList(
+                Build.MANUFACTURER != null ? Build.MANUFACTURER : "Android",
+                Build.MODEL != null ? Build.MODEL : "",
+                Locale.getDefault().getLanguage() != null ? Locale.getDefault().getLanguage() : "",
+                "Android",
+                Build.VERSION.RELEASE != null ? Build.VERSION.RELEASE : "",
+                String.valueOf(getScreenDensity()),
+                String.valueOf(getScreenHeight()),
+                String.valueOf(getScreenWidth()),
+                getTimeZone() != null ? getTimeZone() : "",
+                String.valueOf(Runtime.getRuntime().availableProcessors()),
+                getPackageName() != null ? getPackageName() : "",
+                HM_UrlConfig.versionString,
+                getAndroidId(),
+                getAdvertiserId(),
+                "",
+                "",
+                getAppVersionName() != null ? getAppVersionName() : "",
+                Locale.getDefault().getCountry() != null ? Locale.getDefault().getCountry() : ""
+                );
+    }
+
 
     private String getPackageName() {
         return context.getPackageName();

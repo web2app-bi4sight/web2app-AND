@@ -2,8 +2,10 @@ package com.huntmobi.web2app;
 
 import org.json.JSONObject;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -201,5 +203,33 @@ public class HM_UserInfoModel {
         map.put("ln", lastName);
         map.put("db", birthday);
         return new JSONObject(Collections.unmodifiableMap(map));
+    }
+
+//    self.fbLoginId ?: @"",
+//    self.email ?: @"",
+//    self.phone ?: @"",
+//    self.zipCode ?: @"",
+//    self.city ?: @"",
+//    self.state ?: @"",
+//    self.gender ?: @"",
+//    self.firstName ?: @"",
+//    self.lastName ?: @"",
+//    self.birthday ?: @"",
+//    self.country ?: @""
+
+    public List<Object> toArray() {
+        return Arrays.asList(
+                fbLoginId,
+                email,
+                phone,
+                zipCode,
+                city,
+                state,
+                gender,
+                firstName,
+                lastName,
+                birthday,
+                country
+                );
     }
 }

@@ -159,6 +159,7 @@ public class HM_RequestManager {
                         connection = (HttpURLConnection) url.openConnection();
                         connection.setConnectTimeout(5000);
                         connection.setReadTimeout(5000);
+
                         if (requestBody == null) {
                             connection.setRequestMethod("GET");
                             connection.setRequestProperty("eid", eid);
@@ -177,6 +178,7 @@ public class HM_RequestManager {
                             outputStream.close();
                             Log.d("HM_RequestBody", urlString + requestBody);
                         }
+
                         int responseCode = connection.getResponseCode();
                         if (responseCode == HttpURLConnection.HTTP_OK) {
                             BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));

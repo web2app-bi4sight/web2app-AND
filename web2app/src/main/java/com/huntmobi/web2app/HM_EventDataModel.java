@@ -29,6 +29,11 @@ public class HM_EventDataModel {
         setTimestamp();
     }
 
+    public String eventName() {
+        return eventName;
+    }
+
+
     /**
      * 生成GUID
      */

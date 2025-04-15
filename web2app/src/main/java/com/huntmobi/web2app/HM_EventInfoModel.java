@@ -1,9 +1,13 @@
 package com.huntmobi.web2app;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class HM_EventInfoModel {
@@ -67,4 +71,34 @@ public class HM_EventInfoModel {
         // 创建一个不可变的 Map 并将其转换为 JSONObject
         return new JSONObject(Collections.unmodifiableMap(map));
     }
+
+    public List<Object> toArray() {
+        Map<String, Object> data = eventData.toMap();
+        String jsonString = "";
+        List<String> contentIds = (List<String>) data.get("content_ids");
+        assert contentIds != null;
+        // 确保 contentIds 是一个可变的 List
+        if (contentIds != null && !contentIds.isEmpty()) {
+            try {
+                JSONArray jsonArray = new JSONArray(contentIds);
+                jsonString = jsonArray.toString();
+            } catch (Exception e) {
+                e.printStackTrace();
+                jsonString = "";
+            }
+        }
+        return Arrays.asList(
+                data.get("event_id"),
+                data.get("event_name"),
+                data.get("value"),
+                data.get("currency"),
+                data.get("event_time"),
+                data.get("po_id"),
+                jsonString,
+                String.valueOf(isDelay),
+                String.valueOf(isEventKey)
+        );
+    }
+
+
 }
