@@ -30,7 +30,7 @@ public class MainActivity extends AppCompatActivity {
         //关联设备或者用户的唯一ID，可用于投放后与BI数据对齐。（当游客账号与正式账号无绑定关系时，不要传游客ID，避免造成后期数据对不齐的情况）
         web2AppInstance.Uid = "";
         // 调用方法初始化并归因，在前面的参数赋值完之后再执行
-        web2AppInstance.attibuteWithAppname("test", new HM_Web2App.attibuteCallback() {
+        web2AppInstance.attibuteWithAppname("w2atest", new HM_Web2App.attibuteCallback() {
             @Override
             public void onSuccess(JSONObject data) {
                 if (data == null) {

@@ -31,22 +31,37 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class HM_Network {
     private static final String TAG = "HMNetwork";
     private static final String REQUEST_FILE = "HM_RequestQueue.json";
+    private static final long RETRY_DELAY_MS = 60_000;
+    private static final long PERSIST_WINDOW_MS = 1000L;
+    private static final long PERSIST_MAX_DELAY_MS = 5000L;
+    private static final int PERSIST_CHANGE_THRESHOLD = 20;
 
     private static HM_Network instance;
     private final ExecutorService requestQueue = Executors.newSingleThreadExecutor();
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private final List<JSONObject> savedRequests = new ArrayList<>();
+    private final Map<String, NetworkCallback> callbackMap = new HashMap<>();
     private final Lock requestLock = new ReentrantLock();
     private final File requestsFile;
     private boolean hasLoadedRequests = false;
     private boolean isEnableLog = false;
     private String requestURL = "";
     private final Context context;
+    private long nextScheduledAt = -1L;
+    private final Object persistScheduleLock = new Object();
+    private ScheduledFuture<?> persistFuture = null;
+    private long nextPersistAt = -1L;
+    private long firstDirtyAt = -1L;
+    private int dirtyCount = 0;
 
     public interface NetworkCallback {
         void onSuccess(String response);
@@ -56,7 +71,7 @@ public class HM_Network {
     private HM_Network(Context context) {
         this.context = context.getApplicationContext();
         requestsFile = new File(this.context.getFilesDir(), REQUEST_FILE);
-        loadSavedRequests();
+        requestQueue.execute(this::loadSavedRequests);
     }
 
     public static synchronized HM_Network getInstance(Context context) {
@@ -101,11 +116,12 @@ public class HM_Network {
             JSONObject requestData = buildRequestData(method, relativePath, params);
             JSONObject entry = new JSONObject(Collections.singletonMap(eid, requestData));
             savedRequests.add(entry);
-            persistRequests();
+            if (callback != null) {
+                callbackMap.put(eid, callback);
+            }
+            schedulePersist();
 
-            requestQueue.execute(() ->
-                    executeRequest(method, relativePath, params, eid, callback)
-            );
+            scheduleProcessQueue(0L);
             return true;
         } catch (JSONException e) {
             notifyFailure(callback, e);
@@ -124,10 +140,13 @@ public class HM_Network {
                                 NetworkCallback callback) {
         HttpURLConnection connection = null;
         try {
+            if (!isNetworkAvailable()) {
+                throw new IOException("网络不可用");
+            }
             String fullUrl = requestURL + relativePath;
             String paramsString = processParams(params);
             if (method.equals("GET")) {
-                fullUrl = fullUrl + "?p=" + paramsString;
+                fullUrl = fullUrl + "?p=" + URLEncoder.encode(paramsString, "UTF-8");
             }
             URL url = new URL(fullUrl);
             connection = (HttpURLConnection) url.openConnection();
@@ -151,19 +170,24 @@ public class HM_Network {
                 outputStream.writeBytes(paramsString);
                 outputStream.flush();
                 outputStream.close();
-                Log.d("HM_RequestBody", fullUrl + "\n" + paramsString);
+                if (isEnableLog) {
+                    Log.d("HM_RequestBody", fullUrl + "\n" + paramsString);
+                }
             }
 
             int responseCode = connection.getResponseCode();
             if (responseCode == HttpURLConnection.HTTP_OK) {
                 String response = readInputStream(connection.getInputStream());
-                Log.d("HM_Response", fullUrl + "\n" + response);
+                if (isEnableLog) {
+                    Log.d("HM_Response", fullUrl + "\n" + response);
+                }
                 handleSuccess(eid, response, callback);
             } else {
-                throw new IOException("HTTP错误码: " + responseCode);
+                String errorBody = readErrorStream(connection);
+                throw new IOException("HTTP错误码: " + responseCode + ", errorBody: " + errorBody);
             }
         } catch (Exception e) {
-            handleFailure(e, callback);
+            handleFailure(eid, e, callback);
         } finally {
             if (connection != null) connection.disconnect();
         }
@@ -173,7 +197,8 @@ public class HM_Network {
     // region 数据处理
     public String processParams(Map<String, Object> params) {
         String paramsString = "";
-        List<String> dataArray = (List<String>) params.get("dataArray");
+        Object dataArrayObj = params.get("dataArray");
+        List<String> dataArray = convertToListOfStrings(dataArrayObj);
         if (dataArray != null && dataArray.size() > 0) {
             for (int i = 0; i < dataArray.size(); i++) {
                 String string = dataArray.get(i);
@@ -182,6 +207,55 @@ public class HM_Network {
             paramsString = String.join("|", dataArray);
         }
         return paramsString;
+    }
+
+    /**
+     * 将各种类型的数组/列表安全转换为 List<String>
+     * 支持：List<String>, List<Object>, JSONArray, 数组类型等
+     */
+    private List<String> convertToListOfStrings(Object obj) {
+        if (obj == null) {
+            return null;
+        }
+
+        List<String> result = new ArrayList<>();
+
+        // 处理 List<String>
+        if (obj instanceof List) {
+            List<?> list = (List<?>) obj;
+            for (Object item : list) {
+                result.add(item != null ? item.toString() : "");
+            }
+            return result;
+        }
+
+        // 处理 JSONArray
+        if (obj instanceof JSONArray) {
+            JSONArray jsonArray = (JSONArray) obj;
+            try {
+                for (int i = 0; i < jsonArray.length(); i++) {
+                    Object item = jsonArray.get(i);
+                    result.add(item != null ? item.toString() : "");
+                }
+            } catch (JSONException e) {
+                Log.e(TAG, "转换 JSONArray 失败", e);
+            }
+            return result;
+        }
+
+        // 处理数组类型
+        if (obj.getClass().isArray()) {
+            int length = java.lang.reflect.Array.getLength(obj);
+            for (int i = 0; i < length; i++) {
+                Object item = java.lang.reflect.Array.get(obj, i);
+                result.add(item != null ? item.toString() : "");
+            }
+            return result;
+        }
+
+        // 其他类型，转换为单个元素的列表
+        result.add(obj.toString());
+        return result;
     }
 
     public String optimizedEscapePipeInString(String inputString) {
@@ -209,27 +283,6 @@ public class HM_Network {
             for (int i = 0; i < jsonArray.length(); i++) {
                 JSONObject entry = jsonArray.getJSONObject(i);
                 savedRequests.add(entry);
-
-                Iterator<String> keys = entry.keys();
-                if (keys.hasNext()) {
-                    String eid = keys.next();
-                    JSONObject data = entry.getJSONObject(eid);
-                    requestQueue.execute(() ->
-                            {
-                                try {
-                                    executeRequest(
-                                            data.getString("method"),
-                                            data.getString("relativePath"),
-                                            jsonToMap(data.getJSONObject("params")),
-                                            eid,
-                                            null // 历史请求无回调
-                                    );
-                                } catch (JSONException e) {
-                                    throw new RuntimeException(e);
-                                }
-                            }
-                    );
-                }
             }
             hasLoadedRequests = true;
         } catch (Exception e) {
@@ -237,6 +290,7 @@ public class HM_Network {
         } finally {
             requestLock.unlock();
         }
+        scheduleProcessQueue(0L);
     }
 
     private void persistRequests() {
@@ -274,10 +328,31 @@ public class HM_Network {
             Object value = json.get(key);
             if (value instanceof JSONObject) {
                 value = jsonToMap((JSONObject) value);
+            } else if (value instanceof JSONArray) {
+                // 将 JSONArray 转换为 List<Object>，以便后续处理
+                value = jsonArrayToList((JSONArray) value);
             }
             map.put(key, value);
         }
         return map;
+    }
+
+    /**
+     * 将 JSONArray 转换为 List<Object>
+     */
+    private List<Object> jsonArrayToList(JSONArray jsonArray) throws JSONException {
+        List<Object> list = new ArrayList<>();
+        for (int i = 0; i < jsonArray.length(); i++) {
+            Object item = jsonArray.get(i);
+            if (item instanceof JSONObject) {
+                list.add(jsonToMap((JSONObject) item));
+            } else if (item instanceof JSONArray) {
+                list.add(jsonArrayToList((JSONArray) item));
+            } else {
+                list.add(item);
+            }
+        }
+        return list;
     }
 
     private String readInputStream(InputStream is) throws IOException {
@@ -297,8 +372,9 @@ public class HM_Network {
         notifySuccess(callback, response);
     }
 
-    private void handleFailure(Exception e, NetworkCallback callback) {
+    private void handleFailure(String eid, Exception e, NetworkCallback callback) {
         Log.e(TAG, "请求处理失败", e);
+        updateRequestOnFailure(eid, e);
         notifyFailure(callback, e);
     }
 
@@ -329,6 +405,9 @@ public class HM_Network {
         data.put("method", method);
         data.put("relativePath", path);
         data.put("params", new JSONObject(params));
+        data.put("nextRetryAt", 0L);
+        data.put("retryCount", 0);
+        data.put("lastError", "");
         return data;
     }
 
@@ -343,10 +422,237 @@ public class HM_Network {
                     break;
                 }
             }
-            persistRequests();
+            callbackMap.remove(eid);
+            schedulePersist();
         } finally {
             requestLock.unlock();
         }
+    }
+    // endregion
+
+    // region 重试调度
+    private void scheduleProcessQueue(long delayMs) {
+        long safeDelayMs = Math.max(0L, delayMs);
+        long scheduleAt = System.currentTimeMillis() + safeDelayMs;
+        requestLock.lock();
+        try {
+            if (nextScheduledAt != -1L && nextScheduledAt <= scheduleAt) {
+                return;
+            }
+            nextScheduledAt = scheduleAt;
+        } finally {
+            requestLock.unlock();
+        }
+        scheduler.schedule(() -> requestQueue.execute(this::processQueue), safeDelayMs, TimeUnit.MILLISECONDS);
+    }
+
+    private void processQueue() {
+        NextRequest next;
+        Long nextAt;
+        requestLock.lock();
+        try {
+            nextScheduledAt = -1L;
+            next = findNextDueRequestLocked(System.currentTimeMillis());
+            if (next == null) {
+                nextAt = findEarliestRetryAtLocked();
+            } else {
+                nextAt = null;
+            }
+        } finally {
+            requestLock.unlock();
+        }
+
+        if (next != null) {
+            try {
+                executeRequest(
+                        next.method,
+                        next.relativePath,
+                        next.params,
+                        next.eid,
+                        next.callback
+                );
+            } catch (Exception e) {
+                Log.e(TAG, "执行请求失败", e);
+            }
+            scheduleProcessQueue(0L);
+            return;
+        }
+
+        if (nextAt != null) {
+            long delayMs = Math.max(0L, nextAt - System.currentTimeMillis());
+            scheduleProcessQueue(delayMs);
+        }
+    }
+
+    private NextRequest findNextDueRequestLocked(long now) {
+        JSONObject bestEntry = null;
+        String bestEid = null;
+        long bestRetryAt = Long.MAX_VALUE;
+        for (JSONObject entry : savedRequests) {
+            Iterator<String> keys = entry.keys();
+            if (!keys.hasNext()) continue;
+            String eid = keys.next();
+            JSONObject data = entry.optJSONObject(eid);
+            if (data == null) continue;
+            long retryAt = data.optLong("nextRetryAt", 0L);
+            if (retryAt <= now && retryAt <= bestRetryAt) {
+                bestRetryAt = retryAt;
+                bestEntry = data;
+                bestEid = eid;
+            }
+        }
+        if (bestEntry == null || bestEid == null) {
+            return null;
+        }
+        try {
+            return new NextRequest(
+                    bestEid,
+                    bestEntry.getString("method"),
+                    bestEntry.getString("relativePath"),
+                    jsonToMap(bestEntry.getJSONObject("params")),
+                    callbackMap.get(bestEid)
+            );
+        } catch (JSONException e) {
+            Log.e(TAG, "解析待发送请求失败", e);
+            return null;
+        }
+    }
+
+    private Long findEarliestRetryAtLocked() {
+        Long earliest = null;
+        for (JSONObject entry : savedRequests) {
+            Iterator<String> keys = entry.keys();
+            if (!keys.hasNext()) continue;
+            String eid = keys.next();
+            JSONObject data = entry.optJSONObject(eid);
+            if (data == null) continue;
+            long retryAt = data.optLong("nextRetryAt", 0L);
+            if (earliest == null || retryAt < earliest) {
+                earliest = retryAt;
+            }
+        }
+        return earliest;
+    }
+
+    private void updateRequestOnFailure(String eid, Exception e) {
+        requestLock.lock();
+        try {
+            for (JSONObject entry : savedRequests) {
+                if (!entry.has(eid)) continue;
+                JSONObject data = entry.optJSONObject(eid);
+                if (data == null) return;
+                int retryCount = data.optInt("retryCount", 0) + 1;
+                data.put("retryCount", retryCount);
+                data.put("nextRetryAt", System.currentTimeMillis() + RETRY_DELAY_MS);
+                data.put("lastError", e.getMessage() != null ? e.getMessage() : "unknown error");
+                schedulePersist();
+                return;
+            }
+        } catch (JSONException jsonException) {
+            Log.e(TAG, "更新失败请求失败", jsonException);
+        } finally {
+            requestLock.unlock();
+        }
+    }
+
+    private String readErrorStream(HttpURLConnection connection) {
+        try {
+            InputStream errorStream = connection.getErrorStream();
+            if (errorStream == null) return "";
+            return readInputStream(errorStream);
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private boolean isNetworkAvailable() {
+        try {
+            android.net.ConnectivityManager cm =
+                    (android.net.ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null) return true;
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                android.net.Network network = cm.getActiveNetwork();
+                if (network == null) return false;
+                android.net.NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+                return caps != null && (caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)
+                        || caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR)
+                        || caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET)
+                        || caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_BLUETOOTH));
+            } else {
+                android.net.NetworkInfo info = cm.getActiveNetworkInfo();
+                return info != null && info.isConnected();
+            }
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    private static class NextRequest {
+        private final String eid;
+        private final String method;
+        private final String relativePath;
+        private final Map<String, Object> params;
+        private final NetworkCallback callback;
+
+        private NextRequest(String eid,
+                            String method,
+                            String relativePath,
+                            Map<String, Object> params,
+                            NetworkCallback callback) {
+            this.eid = eid;
+            this.method = method;
+            this.relativePath = relativePath;
+            this.params = params;
+            this.callback = callback;
+        }
+    }
+    // endregion
+
+    // region 资源释放
+    public void shutdown() {
+        requestQueue.shutdown();
+        scheduler.shutdown();
+    }
+    // endregion
+
+    // region 持久化调度
+    private void schedulePersist() {
+        long now = System.currentTimeMillis();
+        long targetDelay;
+        synchronized (persistScheduleLock) {
+            if (dirtyCount == 0) {
+                firstDirtyAt = now;
+            }
+            dirtyCount += 1;
+
+            if (dirtyCount >= PERSIST_CHANGE_THRESHOLD) {
+                targetDelay = 0L;
+            } else {
+                long maxDelay = Math.max(0L, (firstDirtyAt + PERSIST_MAX_DELAY_MS) - now);
+                targetDelay = Math.min(PERSIST_WINDOW_MS, maxDelay);
+            }
+
+            long targetAt = now + targetDelay;
+            if (persistFuture != null && !persistFuture.isDone()) {
+                if (nextPersistAt != -1L && nextPersistAt <= targetAt) {
+                    return;
+                }
+                persistFuture.cancel(false);
+            }
+            nextPersistAt = targetAt;
+            persistFuture = scheduler.schedule(() ->
+                    requestQueue.execute(this::runPersist), targetDelay, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    private void runPersist() {
+        synchronized (persistScheduleLock) {
+            dirtyCount = 0;
+            firstDirtyAt = -1L;
+            nextPersistAt = -1L;
+            persistFuture = null;
+        }
+        persistRequests();
     }
     // endregion
 }

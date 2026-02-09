@@ -27,7 +27,8 @@ public class HM_Smartlink {
     private static String cbc = "";
     private static String atc = "";
     private static String deviceTrackIDString = "";
-    static String baseURL = "https://sl.bi4sight.com";
+    static String baseURL = "https://wa-test.bi4ishgt.com/sl";//测试
+//    static String baseURL = "https://cdn.bi4ishgt.com/sl";
 
     static int callbackNum = 0;
 

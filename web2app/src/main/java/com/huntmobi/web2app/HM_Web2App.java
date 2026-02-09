@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.logging.Handler;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import android.app.Activity;
 import android.os.Bundle;
@@ -46,9 +47,11 @@ public class HM_Web2App {
     public boolean isLaunchReadCut = false;
     public boolean isGetGAID = false;
     public  String pasteboardString;
-    static int callbackNum = 0;
     private static attibuteCallback attCallback;
     public static synchronized HM_Web2App getInstance(Application ap) {
+        if (ap == null) {
+            throw new IllegalArgumentException("HM_Web2App.getInstance(): Application must not be null");
+        }
         if (sharedInstance == null) {
             sharedInstance = new HM_Web2App();
             cbcString = "";
@@ -188,9 +191,7 @@ public class HM_Web2App {
 
     private void attibute(attibuteCallback successBlock) {
 //        Log.d("HMLOG", "attibute: ");
-        if (successBlock != null) {
-            callbackNum += 1;
-        }
+        AtomicBoolean callbackOnce = new AtomicBoolean(false);
         Map<String, Object> dic = setAttibuteRequestInfo();
         cbcString = "";
         pasteboardString = "";
@@ -202,14 +203,11 @@ public class HM_Web2App {
                 new HM_Network.NetworkCallback() {
                     @Override
                     public void onSuccess(String response) {
-                        returnData(response, successBlock);
+                        returnData(response, successBlock, callbackOnce);
                     }
                     @Override
                     public void onFailure(Exception e) {
-                        if (callbackNum > 0) {
-                            successBlock.onSuccess(null);
-                            callbackNum -= 1;
-                        }
+                        notifyCallbackOnce(successBlock, null, callbackOnce);
                     }
                 }
         );
@@ -217,9 +215,7 @@ public class HM_Web2App {
 
     private void launch(attibuteCallback successBlock) {
 //        Log.d("HMLOG", "launch: ");
-        if (successBlock != null) {
-            callbackNum += 1;
-        }
+        AtomicBoolean callbackOnce = new AtomicBoolean(false);
         Map<String, Object> dic = setRequestInfo(Arrays.asList(cbcString, fromString));
         cbcString = "";
         pasteboardString = "";
@@ -231,26 +227,28 @@ public class HM_Web2App {
                 new HM_Network.NetworkCallback() {
                     @Override
                     public void onSuccess(String response) {
-                        returnData(response, successBlock);
+                        returnData(response, successBlock, callbackOnce);
                     }
                     @Override
                     public void onFailure(Exception e) {
-                        if (callbackNum > 0) {
-                            successBlock.onSuccess(null);
-                            callbackNum -= 1;
-                        }
+                        notifyCallbackOnce(successBlock, null, callbackOnce);
                     }
                 }
         );
     }
 
-    private void returnData(String response, attibuteCallback successBlock) {
+    private void returnData(String response,
+                            attibuteCallback successBlock,
+                            AtomicBoolean callbackOnce) {
         try {
             JSONObject jsonResponse = new JSONObject(response);
             String code = jsonResponse.optString("code");
             if ("0".equals(code)) {
                 JSONObject data = jsonResponse.optJSONObject("data");
-                assert data != null;
+                if (data == null) {
+                    notifyCallbackOnce(successBlock, null, callbackOnce);
+                    return;
+                }
                 String w2aDataEncrypt = data.optString("w2akey");
                 String dtid = data.optString("dtid");
                 SharedPreferences sharedPreferences = mApplication.getSharedPreferences(HM_SharedPreferences_Info, Context.MODE_PRIVATE);
@@ -261,22 +259,13 @@ public class HM_Web2App {
                 editor.putString("HM_WEB2APP_DTID", dtid);
                 editor.apply();
                 uploadDeviceInfo();
-                if (callbackNum > 0) {
-                    successBlock.onSuccess(data);
-                    callbackNum -= 1;
-                }
+                notifyCallbackOnce(successBlock, data, callbackOnce);
             } else {
-                if (callbackNum > 0) {
-                    successBlock.onSuccess(null);
-                    callbackNum -= 1;
-                }
+                notifyCallbackOnce(successBlock, null, callbackOnce);
             }
         } catch (JSONException e) {
             e.printStackTrace();
-            if (callbackNum > 0) {
-                successBlock.onSuccess(null);
-                callbackNum -= 1;
-            }
+            notifyCallbackOnce(successBlock, null, callbackOnce);
         }
     }
     private void uploadDeviceInfo() {
@@ -471,5 +460,16 @@ public class HM_Web2App {
 
     interface GoogleAdsIdCallback {
         void onGoogleAdsIdChecked(boolean isGoogleAdsIdNull);
+    }
+
+    private void notifyCallbackOnce(attibuteCallback successBlock,
+                                    JSONObject data,
+                                    AtomicBoolean callbackOnce) {
+        if (successBlock == null || callbackOnce == null) {
+            return;
+        }
+        if (callbackOnce.compareAndSet(false, true)) {
+            successBlock.onSuccess(data);
+        }
     }
 }
